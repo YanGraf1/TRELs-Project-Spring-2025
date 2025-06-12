@@ -1,0 +1,35 @@
+var nightlight = ee.ImageCollection('NOAA/VIIRS/001/VNP46A1')
+  .filter(ee.Filter.date('2023-01-01', '2023-12-31'));
+
+var nighttimelight = nightlight.select('DNB_At_Sensor_Radiance_500m').median();
+
+var dnbVis = {
+  min: 0,
+  max: 100,
+  palette: ['#010a24', '#3c234e', '#863166', '#cf4663', '#ff754b', '#ffb620', '#ffff00'],
+};
+
+var countries = ee.FeatureCollection('FAO/GAUL/2015/level0');
+
+var roi = ee.Feature(ee.FeatureCollection('FAO/GAUL/2015/level0')
+  .filter(ee.Filter.eq('ADM0_NAME', "Egypt"))
+  .first());
+
+// Clip the nightlight image to the geometry of Egypt (roi)
+var clippedNighttimelight = nighttimelight.clip(roi.geometry());
+
+// Mask out pixels with values less than 5, but preserve pixel values
+var filteredNighttimelight = clippedNighttimelight.updateMask(clippedNighttimelight.gte(5));
+
+Map.addLayer(filteredNighttimelight, dnbVis, 'Filtered DNB values');
+
+// Export the filtered image, preserving pixel values
+Export.image.toDrive({
+  image: filteredNighttimelight,
+  description: 'NighttimeLightsFilteredExport',
+  folder: 'EarthEngineExports',  // Optional folder in Google Drive
+  fileNamePrefix: 'egypt_filtered_nighttime_lights',  // File name
+  region: roi.geometry().bounds(),  // Use the region of interest
+  scale: 500,  // Resolution in meters
+  maxPixels: 1e13  // Adjust as needed for large exports
+});
